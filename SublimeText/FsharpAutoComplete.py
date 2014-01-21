@@ -32,7 +32,7 @@ class AutocompleteService():
     def read_from_service(self):
         response = self.service.expect(['<<EOF>>'])
         stripped = self.service.before.strip()
-
+        # on windows a string is returned 
         if (isinstance(stripped, str)) :
             return stripped
         else : 
@@ -82,8 +82,6 @@ def isFsharp(filename):#simple check could be a lot smarter I imagine
 #send the file for parsing, don't wait for it to complete.
 def parsefile(filename, fileContent):
     acs.sendrequest_dontwait('parse "'+filename+'" full')
-    
-    #cotent = 
     result = acs.sendfile(fileContent)
  
 def prepcomp(item):
