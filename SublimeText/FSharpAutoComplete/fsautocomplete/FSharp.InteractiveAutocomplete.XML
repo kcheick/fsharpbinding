@@ -1,0 +1,430 @@
+<?xml version="1.0" encoding="utf-8"?>
+<doc>
+<assembly><name>fsautocomplete</name></assembly>
+<members>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="T:Debug">
+
+</member>
+<member name="F:FSharp.InteractiveAutocomplete.FSharp.InteractiveAutocomplete.IntelliSenseAgent.agent">
+<summary>
+ Start the agent - the agent remembers some state
+ (currently just a list of errors from the last parse)
+</summary>
+</member>
+<member name="F:FSharp.InteractiveAutocomplete.FSharp.InteractiveAutocomplete.IntelliSenseAgent.identToken">
+<summary>
+ Creates an empty &quot;Identifier&quot; token (we need it when getting ToolTip)
+</summary>
+</member>
+<member name="F:FSharp.InteractiveAutocomplete.FSharp.InteractiveAutocomplete.IntelliSenseAgent.checker">
+<summary>
+ Create an F# IntelliSense service
+</summary>
+</member>
+<member name="M:FSharp.InteractiveAutocomplete.IntelliSenseAgent.TriggerParseRequest(FSharp.InteractiveAutocomplete.RequestOptions,System.Boolean)">
+<summary>
+ Trigger background parse request
+</summary>
+</member>
+<member name="M:FSharp.InteractiveAutocomplete.IntelliSenseAgent.GetTypeCheckInfo(FSharp.InteractiveAutocomplete.RequestOptions,Microsoft.FSharp.Core.FSharpOption{System.Int32})">
+<summary>
+ Fetch latest type check information, possibly with a background check if needed
+</summary>
+</member>
+<member name="M:FSharp.InteractiveAutocomplete.IntelliSenseAgent.GetToolTip(FSharp.InteractiveAutocomplete.RequestOptions,System.Int32,System.Int32,System.String,Microsoft.FSharp.Core.FSharpOption{System.Int32})">
+<summary>
+ Gets ToolTip for the specified location (and prints it to the output)
+</summary>
+</member>
+<member name="M:FSharp.InteractiveAutocomplete.IntelliSenseAgent.GetErrors">
+<summary>
+ Get errors from the last parse request
+</summary>
+</member>
+<member name="M:FSharp.InteractiveAutocomplete.IntelliSenseAgent.GetDeclarations(FSharp.InteractiveAutocomplete.RequestOptions)">
+<summary>
+ Get declarations from the last parse request
+</summary>
+</member>
+<member name="">
+
+</member>
+<member name="M:FSharp.InteractiveAutocomplete.IntelliSenseAgent.FindDeclaration(FSharp.InteractiveAutocomplete.RequestOptions,System.Int32,System.Int32,System.String,Microsoft.FSharp.Core.FSharpOption{System.Int32})">
+<summary>
+ Finds the point of declaration of the symbol at pos
+ and writes information to the standard output
+</summary>
+</member>
+<member name="M:FSharp.InteractiveAutocomplete.IntelliSenseAgent.DoCompletion(FSharp.InteractiveAutocomplete.RequestOptions,System.Int32,System.Int32,System.String,Microsoft.FSharp.Core.FSharpOption{System.Int32})">
+<summary>
+ Invokes dot-completion request. Returns possible completions
+ and current residue.
+</summary>
+</member>
+<member name="">
+
+</member>
+<member name="T:FSharp.InteractiveAutocomplete.IntelliSenseAgent">
+<summary>
+ Provides an easy access to F# IntelliSense service
+</summary>
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="T:FSharp.InteractiveAutocomplete.IntelliSenseAgentMessage">
+<summary>
+ Message type that is used by &apos;IntelliSenseAgent&apos;
+</summary>
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="T:FSharp.InteractiveAutocomplete.OutputMode">
+<summary>
+ The possible types of output
+</summary>
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="T:FSharp.InteractiveAutocomplete.RequestOptions">
+<summary>
+ Represents information needed to call the F# IntelliSense service
+ (including project/script options, file name and source)
+</summary>
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="T:FSharp.InteractiveAutocomplete.State">
+<summary>
+ Represents current state
+</summary>
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="M:FSharp.InteractiveAutocomplete.CommandInput.readInput(Microsoft.FSharp.Collections.FSharpList{System.String})">
+<summary>
+ Read multi-line input as a list of strings
+</summary>
+</member>
+<member name="P:FSharp.InteractiveAutocomplete.CommandInput.project">
+<summary>
+ Parse &apos;project&apos; command
+</summary>
+</member>
+<member name="P:FSharp.InteractiveAutocomplete.CommandInput.outputmode">
+<summary>
+ Parse &apos;outputmode&apos; command
+</summary>
+</member>
+<member name="P:FSharp.InteractiveAutocomplete.CommandInput.errors">
+<summary>
+ Parse &apos;errors&apos; command
+</summary>
+</member>
+<member name="P:FSharp.InteractiveAutocomplete.CommandInput.declarations">
+<summary>
+ Parse &apos;declarations&apos; command
+</summary>
+</member>
+<member name="P:FSharp.InteractiveAutocomplete.CommandInput.quit">
+<summary>
+ Parse &apos;quit&apos; command
+</summary>
+</member>
+<member name="P:FSharp.InteractiveAutocomplete.CommandInput.help">
+<summary>
+ Parse &apos;help&apos; command
+</summary>
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="T:FSharp.InteractiveAutocomplete.CommandInput">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="T:FSharp.InteractiveAutocomplete.Main">
+<summary>
+ Contains main loop of the application
+</summary>
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="T:FSharp.InteractiveAutocomplete.Options">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="T:FSharp.InteractiveAutocomplete.ProjectParser">
+
+</member>
+<member name="M:FSharp.InteractiveAutocomplete.TipFormatter.formatTip(Microsoft.FSharp.Compiler.SourceCodeServices.ToolTipText)">
+<summary>
+ Format tool-tip that we get from the language service as string
+</summary>
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="T:FSharp.InteractiveAutocomplete.TipFormatter">
+
+</member>
+<member name="">
+
+</member>
+<member name="T:FSharp.InteractiveAutocomplete.Version">
+
+</member>
+</members>
+</doc>
