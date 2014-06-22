@@ -11,6 +11,32 @@ open MonoDevelop.Ide.Gui.Content
 open MonoDevelop.Projects
 open Microsoft.FSharp.Compiler
 open FSharp.CompilerBinding
+open System.Linq
+open MonoDevelop.Projects.Formats.MSBuild
+
+
+type CorrectGuidMSBuildExtension() =
+    inherit MSBuildExtension()
+
+    override x.SaveProject (monitor, item, project) =
+        try
+            let fsimportExists =
+                project.Imports
+                |> Seq.exists (fun import -> import.Project.EndsWith ("FSharp.Targets",
+                                                                      StringComparison.OrdinalIgnoreCase))
+
+            if fsimportExists then
+                project.GetGlobalPropertyGroup().Properties
+                |> Seq.tryFind (fun p -> p.Name = "ProjectTypeGuids")
+                |> Option.iter
+                    (fun guids ->
+                        guids.Element.InnerText <-
+                            guids.Element.InnerText.Split ([|';'|], StringSplitOptions.RemoveEmptyEntries)
+                            |> Array.filter (fun guid -> not (guid.Equals ("{4925A630-B079-445D-BCD4-3A9C94FE9307}", StringComparison.OrdinalIgnoreCase)))
+                            |> String.concat ";" )
+
+         with exn -> LoggingService.LogWarning ("Failed to remove old F# guid", exn)
+
 
 type FSharpLanguageBinding() =
   static let LanguageName = "F#"
@@ -39,7 +65,14 @@ type FSharpLanguageBinding() =
              for doc in IdeApp.Workbench.Documents do
                  if doc.Editor <> null && CompilerArguments.supportedExtension(Path.GetExtension(doc.FileName.ToString())) then 
                     doc.ReparseDocument ())
-                   
+
+      IdeApp.Workbench.ActiveDocumentChanged.Add(fun _ ->
+        let doc = IdeApp.Workbench.ActiveDocument
+        if doc <> null && doc.Editor <> null &&
+           not doc.Editor.TabsToSpaces &&
+           (CompilerArguments.supportedExtension(IO.Path.GetExtension(doc.FileName.ToString()))) then
+             doc.Editor.TabsToSpaces <- true )
+
       //Add events to invalidate FCS if anything imprtant to do with configuration changes
       //e.g. Files added/removed/renamed, or references added/removed      
       IdeApp.Workspace.FileAddedToProject.Add(invalidateAll)
@@ -102,4 +135,4 @@ type FSharpLanguageBinding() =
     override x.GetSupportedClrVersions() =
       [| ClrVersion.Net_2_0; ClrVersion.Net_4_0; ClrVersion.Net_4_5;  ClrVersion.Clr_2_1 |]
 
-    override x.ProjectStockIcon = "md-fs-project"
+    override x.ProjectStockIcon = "md-project"

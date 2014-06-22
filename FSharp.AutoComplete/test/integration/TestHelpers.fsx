@@ -21,7 +21,7 @@ type FSharpAutoCompleteWrapper() =
 
   member x.parse (s: string) : unit =
     let text = if IO.File.Exists s then IO.File.ReadAllText(s) else ""
-    fprintf p.StandardInput "parse \"%s\"\n%s\n<<EOF>>\n" s text
+    fprintf p.StandardInput "parse \"%s\" sync\n%s\n<<EOF>>\n" s text
 
   member x.completion (fn: string) (line: int) (col: int) : unit =
     fprintf p.StandardInput "completion \"%s\" %d %d\n" fn line col
@@ -53,11 +53,12 @@ let installNuGetPkg s =
                       "../../../lib/nuget/NuGet.exe")
       + " install -ExcludeVersion "
       + s
+  p.StartInfo.UseShellExecute <- false
   p.Start () |> ignore
-  if not (p.WaitForExit(10000)) then
+  if not (p.WaitForExit(5 * 60 * 1000)) then
     try
       p.Kill()
-    with // These two exceptions indicate that the process has gone anyway
-      | :? System.SystemException
-      | :? System.InvalidOperationException -> ()
+    with
+      | :? System.SystemException as e ->
+            printfn "Warning: NuGet installation threw an exception: %A" e
   

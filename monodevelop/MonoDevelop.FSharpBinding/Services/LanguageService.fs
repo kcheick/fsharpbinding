@@ -10,48 +10,17 @@ open System
 open System.IO
 open System.Xml
 open System.Text
-open System.Threading
 open System.Diagnostics
-
-open MonoDevelop.Core
-open MonoDevelop.Core.Assemblies
 open MonoDevelop.Ide
-open MonoDevelop.Ide.Tasks
-open MonoDevelop.Ide.Gui
 open MonoDevelop.Projects
-
-open ICSharpCode.NRefactory.TypeSystem
-open ICSharpCode.NRefactory.Completion
-open ICSharpCode.NRefactory.Documentation
-open ICSharpCode.NRefactory.Editor
-
-open FSharp.CompilerBinding
-open MonoDevelop.FSharp
-open Microsoft.FSharp.Compiler
 open Microsoft.FSharp.Compiler.SourceCodeServices
-
-open Microsoft.FSharp.Compiler.Ast  
-open Microsoft.FSharp.Compiler.Range
-// --------------------------------------------------------------------------------------
 
 /// Contains settings of the F# language service
 module ServiceSettings = 
 
   /// When making blocking calls from the GUI, we specify this value as the timeout, so that the GUI is not blocked forever
   let blockingTimeout = 500
-  
-  /// How often should we trigger the 'OnIdle' event and run background compilation of the current project?
-  let idleTimeout = 3000
 
-  /// When errors are reported, we don't show them immediately (because appearing bubbles while typing are annoying). 
-  /// We show them when the user doesn't type anything new into the editor for the time specified here
-  let errorTimeout = 1000
-
-  // What version of the FSharp language are we supporting?  This will evenually be made a project/script parameter.
-  let fsVersion = FSharpCompilerVersion.FSharp_3_0
-
-
-// --------------------------------------------------------------------------------------
 /// Formatting of tool-tip information displayed in F# IntelliSense
 module internal TipFormatter = 
 
@@ -70,11 +39,11 @@ module internal TipFormatter =
   /// Return the XmlDocumentationProvider for an assembly
   let findXmlDocProviderForAssembly file  = 
       let tryExists s = try if File.Exists s then Some s else None with _ -> None
-      let e = 
+      let xmlDocFilename = 
           match tryExists (Path.ChangeExtension(file,"xml")) with 
           | Some x -> Some x 
           | None -> tryExists (Path.ChangeExtension(file,"XML"))
-      match e with 
+      match xmlDocFilename with 
       | None -> None
       | Some xmlFile ->
       let docReader = xmlDocProvider xmlFile
@@ -119,7 +88,6 @@ module internal TipFormatter =
   let (|SimpleKey|_|) (key:string) = 
      if key.StartsWith "P:" || key.StartsWith "F:" || key.StartsWith "E:" then 
          let name = key.[2..]
-        // printfn "AAA name = %A" name
          match name with 
          | MemberName(typeName,elemName) -> Some (typeName, elemName)
          | _ -> None
@@ -132,21 +100,12 @@ module internal TipFormatter =
 
   let trySelectOverload (nodes: XmlNodeList, argsFromKey:string[]) =
 
-      //printfn "AAA argsFromKey = %A" argsFromKey
       if (nodes.Count = 1) then Some nodes.[0] else
       
       let result = 
         [ for x in nodes -> x ] |> Seq.tryFind (fun curNode -> 
           let paramList = curNode.SelectNodes ("Parameters/*")
-          
-          Debug.WriteLine(sprintf "AAA paramList = %A" [ for x in paramList -> x.OuterXml ])
-          
-          (paramList <> null) &&
-          (argsFromKey.Length = paramList.Count) 
-          (* &&
-          (p, paramList) ||> Seq.forall2 (fun pi pmi -> 
-            let idString = GetTypeString pi.Type
-            (idString = pmi.Attributes ["Type"].Value)) *) )
+          (paramList <> null) && (argsFromKey.Length = paramList.Count) )
 
       match result with 
       | None -> None
@@ -212,48 +171,6 @@ module internal TipFormatter =
     | _ -> String.Empty
         
 
-  /// Indent the text produced by FSharp.Compiler.Service for an F# type signature nicely.
-  let signatureIndenter (text:string) maximumlength= 
-    let sb = StringBuilder()
-
-    let rec formatter (piece:string) firstLine indentTo =
-        let padding = String.replicate indentTo " "
-        let pad (line:string) = 
-            if firstLine then sb.AppendLine(line) |> ignore
-            else sb.Append(padding) |> ignore
-                 sb.AppendLine(line.Trim()) |> ignore
-
-        let maxwidth = if firstLine then maximumlength 
-                       else maximumlength - indentTo
-        if piece.Length > maxwidth then
-             //get the largest index of either * or ->
-
-             let splitIndex =
-                let lastWithinBounds = max (piece.[0..maxwidth].LastIndexOf("*")) (piece.[0..maxwidth].LastIndexOf("->")-1)
-                if lastWithinBounds < 0 then
-                  match piece.[maxwidth..].IndexOf("*"), piece.[maxwidth..].IndexOf("->")-1 with
-                  | first, second when first < 0 && second < 0 -> -1
-                  | first, second when second < 0 -> first
-                  | first, second when first < 0 -> second
-                  | first, second -> min first second
-                else lastWithinBounds
-
-             if splitIndex < 0 then
-                pad piece
-             else
-                pad piece.[0..splitIndex]
-                formatter piece.[splitIndex+1..] false indentTo
-
-         else  pad piece
-    let lines = text.Split([|'\r';'\n'|], StringSplitOptions.None)
-    for line in lines do
-        let indexOfIndent = 
-            match line.IndexOf(':') with
-            | -1 -> 0
-            | foundIndex -> foundIndex+2
-        formatter line true indexOfIndent
-    sb.ToString().Trim()
-
   /// Format some of the data returned by the F# compiler
   let private buildFormatElement el =
     let signatureB, commentB = StringBuilder(), StringBuilder()
@@ -261,7 +178,7 @@ module internal TipFormatter =
     | ToolTipElementNone -> ()
     | ToolTipElement(it, comment) -> 
         Debug.WriteLine("DataTipElement: " + it)
-        signatureB.Append(GLib.Markup.EscapeText (signatureIndenter it 120)) |> ignore
+        signatureB.Append(GLib.Markup.EscapeText (it)) |> ignore
         let html = buildFormatComment comment 
         if not (String.IsNullOrWhiteSpace html) then 
             commentB.Append(html) |> ignore
@@ -273,7 +190,7 @@ module internal TipFormatter =
         if (items.Length > 1) then
           signatureB.AppendLine("Multiple overloads") |> ignore
         items |> Seq.iteri (fun i (it,comment) -> 
-          signatureB.Append(GLib.Markup.EscapeText (signatureIndenter it 120))  |> ignore
+          signatureB.Append(GLib.Markup.EscapeText (it))  |> ignore
           if i = 0 then 
               let html = buildFormatComment comment 
               if not (String.IsNullOrWhiteSpace html) then 
@@ -283,50 +200,16 @@ module internal TipFormatter =
     | ToolTipElementCompositionError(err) -> 
         signatureB.Append("Composition error: " + GLib.Markup.EscapeText(err)) |> ignore
     signatureB.ToString().Trim(), commentB.ToString().Trim()
-      
-  /// Split a line so it fits to a line width
-  let splitLine (sb:StringBuilder) (line:string) lineWidth =
-      let emit (s:string) = sb.Append(s) |> ignore
-      let indent = line |> Seq.takeWhile (fun c -> c = ' ') |> Seq.length
-      let words = line.Split(' ')
-      let mutable i = 0
-      let mutable first = true
-      for word in words do
-          if first || i + word.Length < lineWidth then 
-              emit word 
-              emit " "
-              i <- i + word.Length + 1
-              first <- false
-          else 
-              sb.AppendLine() |> ignore
-              for i in 1 .. indent do emit " "
-              emit word 
-              emit " "
-              i <- indent + word.Length + 1
-              first <- true
-      sb.AppendLine() |> ignore
 
-  /// Wrap text so it fits to a line width
-  let wrapText (text: String) lineWidth =
-      //dont wrap empty lines
-      if text.Length = 0 then text else
-      let sb = StringBuilder()
-      let lines = text.Split [|'\r';'\n'|]
-      for line in lines  do
-          if line.Length <= lineWidth then sb.AppendLine(line) |> ignore
-          else splitLine sb line lineWidth
-      sb.ToString()
-
-  /// Format tool-tip that we get from the language service as string        
-  //
-  //TODO: Use the current projects policy to get line length
+  /// Format tool-tip that we get from the language service as string 
+  //       
+  // TODO: Use the current projects policy to get line length
   // Document.Project.Policies.Get<TextStylePolicy>(types) or fall back to: 
   // MonoDevelop.Projects.Policies.PolicyService.GetDefaultPolicy<TextStylePolicy (types)
   let formatTip (ToolTipText(list)) =
       [ for item in list -> 
           let signature, summary = buildFormatElement item
-          let wrappedSummary = wrapText summary 120
-          signature, wrappedSummary ]
+          signature, summary ]
 
 
   /// For elements with XML docs, the parameter descriptions are buried in the XML. Fetch it.
@@ -362,7 +245,7 @@ module internal MonoDevelop =
     let getLineInfoFromOffset (offset, doc:Mono.TextEditor.TextDocument) = 
         let loc  = doc.OffsetToLocation(offset)
         let line, col = max loc.Line 1, loc.Column-1
-        let currentLine = doc.Lines |> Seq.nth (line-1)
+        let currentLine = doc.GetLineByOffset(offset)
         let lineStr = doc.Text.Substring(currentLine.Offset, currentLine.EndOffset - currentLine.Offset)
         (line, col, lineStr)
     
@@ -374,7 +257,7 @@ module internal MonoDevelop =
 
         let args = CompilerArguments.generateCompilerOptions(project,
                                                              fsconfig,
-                                                             FSharp.CompilerBinding.FSharpCompilerVersion.LatestKnown, 
+                                                             None,
                                                              CompilerArguments.getTargetFramework projConfig.TargetFramework.Id, 
                                                              config, 
                                                              false) |> Array.ofList
@@ -398,7 +281,6 @@ module MDLanguageService =
                 with exn  -> () )))
                 
     
-// --------------------------------------------------------------------------------------
 /// Various utilities for working with F# language service
 module internal ServiceUtils =
   let map =           

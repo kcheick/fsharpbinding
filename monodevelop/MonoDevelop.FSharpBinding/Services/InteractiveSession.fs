@@ -25,13 +25,17 @@ type InteractiveSession() =
 
   let mutable waitingForResponse = false
  
-  let check = if path = "" then raise (Exception("No path to F# Interactive console set, and default could not be located."))
+  let check = 
+    if path = "" then
+        MonoDevelop.Ide.MessageService.ShowError( "No path to F# Interactive console set, and default could not be located.", "Have you got F# installed, see http://fsharp.org for details.")
+        raise (InvalidOperationException("No path to F# Interactive console set, and default could not be located."))
   let fsiProcess = 
     let startInfo = 
       new ProcessStartInfo
         (FileName = path, UseShellExecute = false, Arguments = args, 
          RedirectStandardError = true, CreateNoWindow = true, RedirectStandardOutput = true,
-         RedirectStandardInput = true) 
+         RedirectStandardInput = true, StandardErrorEncoding = Text.Encoding.UTF8, StandardOutputEncoding = Text.Encoding.UTF8)
+    
     try
       Debug.WriteLine (sprintf "Interactive: Starting file=%s, Args=%A" path args)
       Process.Start(startInfo)
@@ -39,8 +43,8 @@ type InteractiveSession() =
       Debug.WriteLine (sprintf "Interactive: Error %s" (e.ToString()))
       reraise()
     
-  let textReceived = new Event<_>()  
-  let promptReady = new Event<_>()  
+  let textReceived = Event<_>()  
+  let promptReady = Event<_>()  
   
   do 
     Event.merge fsiProcess.OutputDataReceived fsiProcess.ErrorDataReceived
@@ -48,10 +52,10 @@ type InteractiveSession() =
       |> Event.add (fun de -> 
           Debug.WriteLine (sprintf "Interactive: received %s" de.Data)
           if de.Data.Trim() = "SERVER-PROMPT>" then
-            DispatchService.GuiDispatch(fun () -> promptReady.Trigger())
+            promptReady.Trigger()
           elif de.Data.Trim() <> "" then
             let str = (if waitingForResponse then waitingForResponse <- false; "\n" else "") + de.Data + "\n"
-            DispatchService.GuiDispatch(fun () -> textReceived.Trigger(str)) )
+            textReceived.Trigger(str))
     fsiProcess.EnableRaisingEvents <- true
   
   member x.Interrupt() =
@@ -85,7 +89,11 @@ type InteractiveSession() =
   member x.SendCommand(str:string) = 
     waitingForResponse <- true
     Debug.WriteLine (sprintf "Interactive: sending %s" str)
-    fsiProcess.StandardInput.Write(str + if str.EndsWith(";;") then "\n" else ";;\n")
+    let message = str + if str.EndsWith(";;") then "\n" else ";;\n"
+    let stream = fsiProcess.StandardInput.BaseStream
+    let bytes = Text.Encoding.UTF8.GetBytes(message)
+    fsiProcess.StandardInput.BaseStream.Write(bytes,0,bytes.Length)
+    fsiProcess.StandardInput.BaseStream.Flush()
 
   member x.Exited = fsiProcess.Exited
     

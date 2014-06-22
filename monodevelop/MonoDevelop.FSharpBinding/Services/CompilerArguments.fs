@@ -40,46 +40,101 @@ module CompilerArguments =
       elif targetFramework = TargetFrameworkMoniker.NET_4_0 then FSharpTargetFramework.NET_4_0
       elif targetFramework = TargetFrameworkMoniker.NET_4_5 then FSharpTargetFramework.NET_4_5
       else FSharpTargetFramework.NET_4_5
+  
+  module Project =
+                                    
+      let isPortable (project: DotNetProject) =
+        not (String.IsNullOrEmpty project.TargetFramework.Id.Profile)
+      
+      let getPortableReferences (project: DotNetProject) configSelector = 
+        let portableReferences =
+            // create a new target framework  moniker, the default one is incorrect for portable unless the project type is PortableDotnetProject
+            // which has the default moniker profile of ".NETPortable" rather than ".NETFramework".  We cant use a PortableDotnetProject as this 
+            // requires adding a guid flavour, which breaks compatiability with VS until the MD project system is refined to support projects the way VS does.
+            let frameworkMoniker = TargetFrameworkMoniker (TargetFrameworkMoniker.ID_PORTABLE, project.TargetFramework.Id.Version, project.TargetFramework.Id.Profile)
+            let assemblyDirectoryName = frameworkMoniker.GetAssemblyDirectoryName()
 
+            project.TargetRuntime.GetReferenceFrameworkDirectories() 
+            |> Seq.tryFind (fun fd ->  Directory.Exists(fd.Combine([|TargetFrameworkMoniker.ID_PORTABLE|]).ToString()))
+            |> function
+               | Some fd -> Directory.EnumerateFiles(Path.Combine(fd.ToString(), assemblyDirectoryName), "*.dll")
+               | None -> Seq.empty
+
+        project.GetReferencedAssemblies(configSelector) 
+        |> Seq.append portableReferences
+        |> set 
+        |> Set.map ((+) "-r:")
+        |> Set.toList
+
+  module ReferenceResolution =
+
+    let tryGetDefaultReference langVersion targetFramework filename (extrapath: string option) =
+          let dirs = 
+            match extrapath with
+            | Some path -> path :: FSharpEnvironment.getDefaultDirectories(langVersion, targetFramework)
+            | None -> FSharpEnvironment.getDefaultDirectories(langVersion, targetFramework)
+          FSharpEnvironment.resolveAssembly dirs filename
+
+    let tryGetReferenceFromAssembly (assemblyRef:string) (refToFind:string) =
+        let assembly = Mono.Cecil.AssemblyDefinition.ReadAssembly(assemblyRef)
+        assembly.MainModule.AssemblyReferences
+        |> Seq.tryFind (fun name -> name.Name = refToFind)
+        |> Option.bind (fun assemblyNameRef -> let resolved = Mono.Cecil.DefaultAssemblyResolver().Resolve(assemblyNameRef)
+                                               Some (resolved.MainModule.FullyQualifiedName))
+
+  let resolutionFailedMessage = sprintf "Resolution: Assembly resolution failed when trying to find default reference for: %s"
+       
   /// Generates references for the current project & configuration as a 
   /// list of strings of the form [ "-r:<full-path>"; ... ]
-  let private generateReferences (project: DotNetProject, langVersion, targetFramework, configSelector, shouldWrap) = 
-   [ // Should we wrap references in "..."
-    let wrapf = if shouldWrap then wrapFile else id
+  let generateReferences (project: DotNetProject, langVersion, targetFramework, configSelector, shouldWrap) = 
+   if Project.isPortable project then
+        Project.getPortableReferences project configSelector 
+   else
+       let wrapf = if shouldWrap then wrapFile else id
+       
+       [
+        let refs =  project.GetReferencedAssemblies(configSelector) |> Seq.toArray
+        let projectReferences =
+            project.GetReferencedAssemblies(configSelector)
+            // The unversioned reference text "FSharp.Core" is used in Visual Studio .fsproj files.  This can sometimes be 
+            // incorrectly resolved so we just skip this simple reference form and rely on the default directory search below.
+            |> Seq.filter (fun (ref: string) -> not (ref.EndsWith("FSharp.Core")))
+            |> set
+             
+        let find assemblyName=
+            projectReferences
+            |> Seq.tryFind (fun fn -> fn.EndsWith(assemblyName + ".dll", true, CultureInfo.InvariantCulture) 
+                                      || fn.EndsWith(assemblyName, true, CultureInfo.InvariantCulture))
+             
+        // If 'mscorlib.dll' or 'FSharp.Core.dll' is not in the set of references, we try to resolve and add them. 
+        match find "FSharp.Core", find "mscorlib" with
+        | None, Some mscorlib ->
+            // if mscorlib is founbd without FSharp.Core yield fsharp.core in the same base dir as mscorlib
+            // falling back to one of the default directories
+            let extraPath = Some (Path.GetDirectoryName (mscorlib))
+            match ReferenceResolution.tryGetDefaultReference langVersion targetFramework "FSharp.Core" extraPath with
+            | Some ref -> yield "-r:" + wrapf(ref)
+            | None -> LoggingService.LogWarning(resolutionFailedMessage "FSharp.Core")
 
-    // The unversioned reference text "FSharp.Core" is used in Visual Studio .fsproj files.  This can sometimes be 
-    // incorrectly resolved so we just skip this simple reference form and rely on the default directory search below.
-    let projDir = Path.GetDirectoryName(project.FileName.ToString())
-    let files =
-        [ for ref in project.GetReferencedAssemblies(configSelector) do
-            if not (Path.IsPathRooted ref) then
-                yield Path.GetFullPath (Path.Combine(projDir, ref))
-            else
-                yield Path.GetFullPath ref ]
-        |> Seq.filter (fun (ref: string) -> not (ref.EndsWith("FSharp.Core")))
-        |> set
+        | Some fsharpCore, None ->
+            // If FSharp.Core is found without mscorlib yield an mscorlib thats referenced from FSharp.core
+            match ReferenceResolution.tryGetReferenceFromAssembly fsharpCore "mscorlib" with
+            | Some resolved -> yield "-r:" + wrapf(resolved)
+            | None -> LoggingService.LogWarning(resolutionFailedMessage "mscorlib")
 
-                    
-    // If 'mscorlib.dll' and 'FSharp.Core.dll' is not in the set of references, we need to resolve it and add it. 
-    // We look in the directories returned by getDefaultDirectories(langVersion, targetFramework).
-    for assumedFile in ["mscorlib"; "FSharp.Core"] do 
-      let coreRef =
-        files |> Seq.tryFind (fun fn -> fn.EndsWith(assumedFile + ".dll", true, CultureInfo.InvariantCulture) 
-                                        || fn.EndsWith(assumedFile, true, CultureInfo.InvariantCulture))
-    
-      match coreRef with
-      | None ->
-          //fall back to using default directories for F# Core
-          let dirs = FSharpEnvironment.getDefaultDirectories(langVersion, targetFramework) 
-          match FSharpEnvironment.resolveAssembly dirs assumedFile with
-          | Some fn -> yield "-r:" + wrapf(fn)
-          | None -> Debug.WriteLine(sprintf "Resolution: Assembly resolution failed when trying to find default reference for '%s'!" assumedFile)
+        | None, None ->
+            // If neither are found yield the default fsharp.core and mscorlib
+            match ReferenceResolution.tryGetDefaultReference langVersion targetFramework "FSharp.Core" None with
+            | Some ref -> yield "-r:" + wrapf(ref)
+            | None -> LoggingService.LogWarning(resolutionFailedMessage "FSharp.Core")
 
-      | Some r -> 
-        Debug.WriteLine(sprintf "Resolution: Found '%s' reference '%s'" assumedFile r)
-      
-    for file in files do 
-      yield "-r:" + wrapf(file) ]
+            match ReferenceResolution.tryGetDefaultReference langVersion targetFramework "mscorlib" None with
+            | Some ref -> yield "-r:" + wrapf(ref)
+            | None -> LoggingService.LogWarning(resolutionFailedMessage "mscorlib")
+        | _ -> () // found them both, no action needed
+                  
+        for file in projectReferences do 
+          yield "-r:" + wrapf(file) ]
 
 
   /// Generates command line options for the compiler specified by the 
@@ -200,7 +255,7 @@ module CompilerArguments =
     match getShellToolPath [| ""; ".exe"; ".bat" |] "fsi" with
     | Some(dir,file)-> Some(Path.Combine(dir,file))
     | None-> 
-    match FSharpEnvironment.BinFolderOfDefaultFSharpCompiler(FSharpCompilerVersion.LatestKnown) with
+    match FSharpEnvironment.BinFolderOfDefaultFSharpCompiler None with
     | Some(dir) when FSharpEnvironment.safeExists(Path.Combine(dir, "fsi.exe")) ->  
         Some(Path.Combine(dir,"fsi.exe"))
     | _ -> None
@@ -229,13 +284,18 @@ module CompilerArguments =
     match getShellToolPath [| ""; ".exe"; ".bat" |] "fsc" with
     | Some(dir,file) -> Some(Path.Combine(dir,file))
     | None -> 
-    match FSharpEnvironment.BinFolderOfDefaultFSharpCompiler(FSharpCompilerVersion.LatestKnown) with
+    match FSharpEnvironment.BinFolderOfDefaultFSharpCompiler None with
     | Some(dir) when FSharpEnvironment.safeExists(Path.Combine(dir, "fsc.exe")) ->  
         Some(Path.Combine(dir,"fsc.exe"))
     | _ -> None
 
-  let getArgumentsFromProject (proj:DotNetProject, config) =
+  let getArgumentsFromProject (proj:DotNetProject) =
+        let config =
+            match MonoDevelop.Ide.IdeApp.Workspace with
+            | ws when ws <> null && ws.ActiveConfiguration <> null -> ws.ActiveConfiguration
+            | _ -> MonoDevelop.Projects.ConfigurationSelector.Default
+
         let projConfig = proj.GetConfiguration(config) :?> DotNetProjectConfiguration
         let fsconfig = projConfig.CompilationParameters :?> FSharpCompilerParameters
-        generateCompilerOptions (proj, fsconfig, FSharpCompilerVersion.LatestKnown , getTargetFramework projConfig.TargetFramework.Id, config, false) |> Array.ofList
+        generateCompilerOptions (proj, fsconfig, None, getTargetFramework projConfig.TargetFramework.Id, config, false) |> Array.ofList
 
